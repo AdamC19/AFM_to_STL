@@ -2,7 +2,7 @@
 =====
 
 ##Overview:
-This is a plugin, written in Java for use with [ImageJ](https://imagej.nih.gov/ij/ "ImageJ Homepage"). The plugin is a pilter that takes an image, copies it and converts it to grayscale, then uses the data to produce an STL format file suitable for 3D printing. It treats brighter value pixels at higher points, and creates a surface using these. Before doing that, it creates a "floor" and "walls" (both required to facilitate 3D printability). The program outputs the STL in ASCII format, resulting in a rather large file, compared with a binary STL file containing the same information.
+This is a plugin, written in Java for use with [ImageJ](https://imagej.nih.gov/ij/ "ImageJ Homepage"). The plugin is a filter that takes an image, copies it and converts it to grayscale, then uses the data to produce an STL format file suitable for 3D printing. It creates a surface using these, treating brighter value pixels as higher points. Before doing that, it creates a "floor" and "walls" (both required to facilitate 3D printability). The program outputs the STL in ASCII format, resulting in a rather large file, compared with a binary STL file containing the same information.
 
 =====
 ##Details on How the Program Works:
