@@ -128,6 +128,7 @@ public class AFM_to_STL implements PlugInFilter {
 		}else{
 			gdInfo = new GenericDialog("Summary");
 			gdInfo.addMessage("No valid file path given. AFM to STL will exit.");
+			gdInfo.addMessage("Facets created: "+nFacets);
 		}
 		gdInfo.showDialog();
 	}
@@ -386,21 +387,23 @@ public class AFM_to_STL implements PlugInFilter {
 			// how many bytes will this thing be
 			// header = (UINT8 * 80) + UINT32       = 84 bytes   
 			//
-			// each facet = 12 * (REAL32) + UINT16  = 50 bytes
+			// each facet = (4*3) * (REAL32) + UINT16  = 50 bytes
 			// header + facets*N                    = 84 + 50*N
 			//int headerLen	= 84;
 			//int facetLen	= 50;
 			int facets 		= (4*nLenX*nLenY + 2*(nLenX + nLenY) - 10);
-			int length 		= BYTES_IN_HEADER + BYTES_PER_FACET * facets ;
-			byte[] bytes 	= new byte[length];
+			int length 		= BYTES_IN_HEADER + (BYTES_PER_FACET * facets );
+			//byte[] bytes 	= new byte[length];
 
 			char[] header 	= sDescription.substring(0,80).toCharArray();	// 80 character header stuff
-
+			//byte[] head 	= new byte[80];
 			ByteBuffer main = ByteBuffer.allocate(length);					//
 			
 			for(int i =  0; i < header.length; i++){
 				main.put((byte)header[i]);									//
 			}
+			//main.put(head);												//
+			main.order(ByteOrder.LITTLE_ENDIAN);
 			main.putInt(facets);											//
 			
 			//BEGIN WRITING THE FACETS
@@ -579,7 +582,7 @@ public class AFM_to_STL implements PlugInFilter {
 
 			//main.order(ByteOrder.LITTLE_ENDIAN);
 
-			path = Files.write(path, main.array(), StandardOpenOption.APPEND);
+			path = Files.write(path, main.array());//, StandardOpenOption.APPEND);
 			return true;
 		}catch(IOException e){
 			return false;
@@ -600,8 +603,11 @@ public class AFM_to_STL implements PlugInFilter {
 	 * @return byte[] of length 50 which defines the facet specified by the 3 vertices.
 	 */
 	public byte[] makeBinaryFacet(Vertex va, Vertex vb, Vertex vc){
-		//byte[] bytes 		= new byte[BYTES_PER_FACET];//array to eventually return
-		
+
+		//create a ByteBuffer
+		ByteBuffer bb 		= ByteBuffer.allocate(BYTES_PER_FACET);	//
+		bb 					= bb.order(ByteOrder.LITTLE_ENDIAN);	//order the bytes as Little endian
+
 		//Floats are 32-bit
 		float[] n 			= new float[3];				//will deal with later
 		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
@@ -609,10 +615,6 @@ public class AFM_to_STL implements PlugInFilter {
 		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
 
 		float[][] vertices 	= {n, v1, v2, v3};			//
-
-
-		//create a ByteBuffer
-		ByteBuffer bb 		= ByteBuffer.allocate(BYTES_PER_FACET);	//
 
 		//create an array of bytes by PUTTING values into it
 		for(int i = 0; i<vertices.length; i++){
@@ -622,8 +624,6 @@ public class AFM_to_STL implements PlugInFilter {
 		}
 		short j=0;
 		bb.putShort(j);
-
-		bb = bb.order(ByteOrder.LITTLE_ENDIAN);		//order the bytes as Little endian
 
 		nFacets++;									//keeping track of # of facets created
 
