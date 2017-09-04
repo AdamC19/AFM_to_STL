@@ -6,8 +6,6 @@ import java.awt.*;
 import ij.plugin.filter.*;
 import java.io.*;
 import java.util.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * AFM_to_STL
@@ -105,17 +103,11 @@ public class AFM_to_STL implements PlugInFilter {
 			return;
 		}
 		//
-		GenericDialog gdInfo;
-		if(saveAsStl()){
-			gdInfo = new GenericDialog("Model Statistics");
-			int nExpected = 4*nLenX*nLenY + 2*(nLenX + nLenY) - 10;
-			gdInfo.addMessage("Expected "+ nExpected +" facets");
-			gdInfo.addMessage("Model has "+ nFacets +" facets.");
-			
-		}else{
-			gdInfo = new GenericDialog("Summary");
-			gdInfo.addMessage("No valid file path given. AFM to STL will exit.");
-		}
+		saveAsStl();
+		GenericDialog gdInfo = new GenericDialog("Model Statistics");
+		int nExpected = 4*nLenX*nLenY + 2*(nLenX + nLenY) - 10;
+		gdInfo.addMessage("Expected "+ nExpected +" facets");
+		gdInfo.addMessage("Model has "+ nFacets +" facets.");
 		gdInfo.showDialog();
 	}
 	
@@ -127,7 +119,7 @@ public class AFM_to_STL implements PlugInFilter {
 	 * returned. 
 	 */
 	public boolean saveAsStl(){
-		SaveDialog sd = new SaveDialog("Save ASCII output file ",sModelName,".stl");
+		SaveDialog sd = new SaveDialog("Save ASCII output file",sModelName,".stl");
 		String sBase = sd.getDirectory();
 		String sFileName = sd.getFileName();
 		if (sFileName == null){
@@ -351,59 +343,6 @@ public class AFM_to_STL implements PlugInFilter {
 			out.close();
 		}
 		return true;
-	}
-
-
-
-
-	/**
-	 * Writes a binary file to the specified file path. Returns a boolean to indicate success or failure.
-	 * 
-	 * @param sPath a String specifying the file path
-	 * @return boolean true indicates successful STL creation, false indicates one several errors was thrown
-	 */
-	public boolean saveAsBinary(String sPath){
-		try{
-			Path path = Path.resolve(sPath);	// resolve string to a "Path" that we can write to
-
-			// how many bytes will this thing be
-			// header = (UINT8 * 80) + UINT32       = 84 bytes   
-			//
-			// each facet = 12 * (REAL32) + UINT16  = 50 bytes
-			// header + facets*N                    = 84 + 50*N
-			int headerLen	= 84;
-			int facetLen	= 50;
-			int facets 		= (4*nLenX*nLenY + 2*(nLenX + nLenY) - 10);
-			int length 		= header + facetLen * facets  ;
-			byte[] bytes 	= byte[length];
-
-			char[] header   = sDescription.substring(0,80).toCharArray();
-
-			
-			for(int i =  0; i < header.length; i++){
-				bytes[i] = header[i];
-			}
-			String sFacets = Integer.toBinaryString(facets);
-			String s;
-			for(int i = 0; i<sFacets.length(); i=i+8){
-				s = sFacets.substring(i, i+8);
-				b = Byte.valueOf(s, 2).byteValue();
-				bytes[] = b;
-			}
-			
-
-			path = Files.write(path, bytes, StandardOpenOption.APPEND);
-		}catch(IOException e){
-			return false;
-		}catch(UnsupportedOperationException e){
-			return false;
-		}catch(SecurityException e){
-			return false;
-		}
-		finally{
-
-		}
-		return false;
 	}
 	
 	/**
