@@ -34,11 +34,21 @@ public class AFM_to_STL implements PlugInFilter {
 	ImageProcessor ip;
 	ImageProcessor ip_gray;
 	PrintWriter out;
+
+	/* Number of bytes to define a facet in a binary STL file. 
+	each facet = 12 * (REAL32) + UINT16  = 50 bytes */
+	public final int BYTES_PER_FACET = 50;
+
+	/* Number of bytes in the header of a binary STL file.
+	header = (UINT8 * 80) + UINT32 = 84 bytes*/
+	public final int BYTES_IN_HEADER = 84;
+
 	private double dScanSizeNM, dSamplesPerLine, dLines, nmPerSample, dZScaleFactor, dBasethickness;
 	private String sTitle 		= "AFM_to_STL_test1";
 	private String sDescription = "This is an ImageJ Plugin designed to convert an AFM scan image to an STL suitable for 3D printing.";
 	private String sModelName;
 	private int nLenY, nLenX, nFacets;
+	private boolean isBinary = false;
 	
 	/**
 	 * Vertex holds values for actual (x,y,z) coordinates of the vertices.
@@ -133,7 +143,10 @@ public class AFM_to_STL implements PlugInFilter {
 		if (sFileName == null){
 			return false;
 		}else{
-			return saveAsStl(sBase+sFileName);
+			if(!isBinary)
+				return saveAsStl(sBase+sFileName);
+			else
+				return saveAsBinary(sBase+sFileName);
 		}
 	}
 	
@@ -364,35 +377,214 @@ public class AFM_to_STL implements PlugInFilter {
 	 */
 	public boolean saveAsBinary(String sPath){
 		try{
-			Path path = Path.resolve(sPath);	// resolve string to a "Path" that we can write to
+			Path path 		= Path.resolve(sPath);							// resolve string to a "Path" that we can write to
 
 			// how many bytes will this thing be
 			// header = (UINT8 * 80) + UINT32       = 84 bytes   
 			//
 			// each facet = 12 * (REAL32) + UINT16  = 50 bytes
 			// header + facets*N                    = 84 + 50*N
-			int headerLen	= 84;
-			int facetLen	= 50;
+			//int headerLen	= 84;
+			//int facetLen	= 50;
 			int facets 		= (4*nLenX*nLenY + 2*(nLenX + nLenY) - 10);
-			int length 		= header + facetLen * facets  ;
+			int length 		= BYTES_IN_HEADER + BYTES_PER_FACET * facets ;
 			byte[] bytes 	= byte[length];
 
-			char[] header   = sDescription.substring(0,80).toCharArray();
+			char[] header 	= sDescription.substring(0,80).toCharArray();	// 80 character header stuff
 
+			ByteBuffer main;												//
 			
 			for(int i =  0; i < header.length; i++){
-				bytes[i] = header[i];
+				//bytes[i] = header[i];
+				main.putChar(header[i]);									//
 			}
 			String sFacets = Integer.toBinaryString(facets);
 			String s;
 			for(int i = 0; i<sFacets.length(); i=i+8){
 				s = sFacets.substring(i, i+8);
-				b = Byte.valueOf(s, 2).byteValue();
-				bytes[] = b;
+				main.put(Byte.valueOf(s, 2).byteValue());					//
+				//b = Byte.valueOf(s, 2).byteValue();
+				//bytes[] = b;
 			}
 			
+			//BEGIN WRITING THE FACETS
+			byte[] pixels = (byte[])ip_gray.getPixels();	//make a big 1D array
+															//values ranging from -128 to 127
+			short[] rawHeights = new short[pixels.length];	//big 1D array
+			
+			int nLowest = 255;
+			
+			//FIND LOWEST HEIGHT VALUE & MAKE COPY ARRAY
+			for(int pix = 0; pix < pixels.length; pix++){
+				rawHeights[pix] = (short)(pixels[pix] & 0xff);	//make values range from 0-255 shrtPix;
+				if(rawHeights[pix] < nLowest){
+					nLowest = rawHeights[pix];
+				}
+				
+			}
+			
+			//MAKE THE ARRAY FOLLOW THE RIGHT-HAND-RULE
+			Vertex vertices[][] = new Vertex[nLenY][nLenX];	//nLenY rows of nLenX points each
+			int nLoc = rawHeights.length;
+			double height;
+			for(int row = 0; row < nLenY; row++){
+				for(int pt = nLenX-1; pt >= 0; pt--){
+					height = (( (rawHeights[--nLoc]) - nLowest ) * dZScaleFactor) + dBasethickness;
+					Vertex v = new Vertex(pt*nmPerSample,row*nmPerSample,height);
+					vertices[row][pt] = v;
+				}
+			}
+			//MAKE EXPANDED ARRAY
+			Vertex expHeights[][] = new Vertex[(nLenY*2)-1][];//nLenX];
+			for(int row = 0; row < nLenY; row++){
+				expHeights[row*2] = Arrays.copyOf(vertices[row], nLenX);
+				Vertex[] newRow = new Vertex[nLenX-1];
+				
+				if(row < nLenY-1){
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex v 		= vertices[row][pt];
+						Vertex nextV	= vertices[row][pt+1];
+						Vertex v2		= vertices[row+1][pt];
+						Vertex nextV2	= vertices[row+1][pt+1];
+						
+						double newX	= v.getX() + (nmPerSample/2);
+						double newY	= v.getY() + (nmPerSample/2);
+						double newZ	= (v.getZ()+nextV.getZ()+v2.getZ()+nextV2.getZ())/4;
+						
+						Vertex newV = new Vertex(newX, newY, newZ);
+						newRow[pt] = newV;
+					}	
+					expHeights[(row*2)+1] = newRow;
+				}
+			}
+			
+			//MAKE THE FLOOR
+			for(int line = 0; line<expHeights.length; line++){
+				if(line == 0){
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex va = (Vertex) expHeights[line][pt].clone();
+						Vertex vb = (Vertex) expHeights[line+2][nLenX-1].clone();
+						Vertex vc = (Vertex) expHeights[line][pt+1].clone();
+						va.setZ(0.0);
+						vb.setZ(0.0);
+						vc.setZ(0.0);
+						
+						main.put(makeBinaryFacet(va,vb,vc));
+					}
+				}else if(line == expHeights.length-1){
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex va = (Vertex) expHeights[line][pt].clone();
+						Vertex vb = (Vertex) expHeights[line][pt+1].clone();
+						Vertex vc = (Vertex) expHeights[line-2][0].clone();
+						va.setZ(0.0);
+						vb.setZ(0.0);
+						vc.setZ(0.0);
+						
+						main.put(makeBinaryFacet(va,vb,vc));
+					}
+				}else if(line % 2 == 0){
+					Vertex va = (Vertex) expHeights[line][0].clone();
+					Vertex vb = (Vertex) expHeights[line][nLenX-1].clone();
+					Vertex vc = (Vertex) expHeights[line-2][0].clone();
+					va.setZ(0.0);
+					vb.setZ(0.0);
+					vc.setZ(0.0);
+					main.put(makeBinaryFacet(va,vb,vc));
+					
+					Vertex va2 = (Vertex) expHeights[line][0].clone();
+					Vertex vb2 = (Vertex) expHeights[line+2][nLenX-1].clone();	//NullPointerException!!!
+					Vertex vc2 = (Vertex) expHeights[line][nLenX-1].clone();
+					va2.setZ(0.0);
+					vb2.setZ(0.0);
+					vc2.setZ(0.0);
+					main.put(makeBinaryFacet(va2,vb2,vc2));
+				}else{}
+			}
+			
+			//MAKE EDGES / SIDES
+			for(int line = 0; line<expHeights.length; line++){
+				if(line == 0){	//front
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex va = expHeights[line][pt+1];
+						Vertex vb = (Vertex) expHeights[line][pt].clone();
+						vb.setZ(0.0);
+						Vertex vc = (Vertex) va.clone();
+						vc.setZ(0.0);
+						
+						Vertex va2 = va;
+						Vertex vb2 = expHeights[line][pt];
+						Vertex vc2 = vb;
+						main.put(makeBinaryFacet(va, vb, vc));
+						main.put(makeBinaryFacet(va2,vb2,vc2));
+					}
+				}else if(line == expHeights.length -1){	//back
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex va = expHeights[line][pt+1];
+						Vertex vb = (Vertex) va.clone();
+						vb.setZ(0.0);
+						Vertex vc = (Vertex) expHeights[line][pt].clone();
+						vc.setZ(0.0);
+						
+						Vertex va2 = va;
+						Vertex vb2 = vc;
+						Vertex vc2 = expHeights[line][pt];
+						main.put(makeBinaryFacet(va, vb, vc));
+						main.put(makeBinaryFacet(va2,vb2,vc2));
+					}
+				}if(line % 2 == 0 && line != expHeights.length-1){	//left & right sides
+					//Left side
+					Vertex va = expHeights[line+2][0];
+					Vertex vb = (Vertex) va.clone();
+					vb.setZ(0.0);
+					Vertex vc = (Vertex) expHeights[line][0].clone();
+					vc.setZ(0.0);
+					
+					Vertex va2 = va;
+					Vertex vb2 = vc;
+					Vertex vc2 = vc;
+					
+					//Right side
+					Vertex va3 = expHeights[line+2][nLenX-1];
+					Vertex vb3 = (Vertex) expHeights[line][nLenX-1].clone();
+					vb3.setZ(0.0);
+					Vertex vc3 = (Vertex) va3.clone();
+					vc3.setZ(0.0);
+					
+					Vertex va4 = va3;
+					Vertex vb4 = expHeights[line][nLenX-1];
+					Vertex vc4 = (Vertex) vb4.clone();
+					vc4.setZ(0.0);
+					
+					main.put(makeBinaryFacet(va, vb, vc));
+					main.put(makeBinaryFacet(va2,vb2,vc2));
+					main.put(makeBinaryFacet(va3,vb3,vc3));
+					main.put(makeBinaryFacet(va4,vb4,vc4));
+				}
+			}
+			
+			//SURFACE CONTOURS
+			for(int line = 0; line<expHeights.length-2; line++){
+				
+				if(line % 2 == 0){	//line with real data
+					for(int pt = 0; pt < nLenX-1; pt++){
+						Vertex vSW   = expHeights[line][pt];
+						Vertex vNW   = expHeights[line+2][pt];
+						Vertex vNE   = expHeights[line+2][pt+1];
+						Vertex vSE   = expHeights[line][pt+1];
+						Vertex vCent = expHeights[line+1][pt];
+						
+						main.put(makeBinaryFacet(vSW, vCent, vNW));	//West facet
+						main.put(makeBinaryFacet(vNW, vCent, vNE));	//North facet
+						main.put(makeBinaryFacet(vNE, vCent, vSE));	//East facet
+						main.put(makeBinaryFacet(vSE, vCent, vSW));	//South facet
+					}
+				}else{}
+			}
+			//main.put("endsolid "+ sModelName + "\n");
 
-			path = Files.write(path, bytes, StandardOpenOption.APPEND);
+			main.order(ByteOrder.LITTLE_ENDIAN);
+
+			path = Files.write(path, main.array(), StandardOpenOption.APPEND);
 		}catch(IOException e){
 			return false;
 		}catch(UnsupportedOperationException e){
@@ -406,6 +598,45 @@ public class AFM_to_STL implements PlugInFilter {
 		return false;
 	}
 	
+	/**
+	 * Method to construct a binary formatted definition of a facet based on three vertices.
+	 * 
+	 * @param va first Vertex object
+	 * @param vb next Vertex object, ordered following the right-hand-rule
+	 * @param vc final Vertex object, following right-hand-rule
+	 *
+	 * @return byte[] of length 50 which defines the facet specified by the 3 vertices.
+	 */
+	public byte[] makeBinaryFacet(Vertex va, Vertex vb, Vertex vc){
+		byte[] bytes 		= byte[BYTES_PER_FACET];//array to eventually return
+		
+		//Floats are 32-bit
+		float[] n 			= float[3];				//will deal with later
+		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
+		float[] v2 			= {(float)vb.getX(), (float)vb.getY(), (float)vb.getZ()};
+		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
+
+		float[][] vertices 	= {v1, v2, v3};			//
+
+
+		//create a ByteBuffer
+		ByteBuffer bb;								//
+
+		//create an array of bytes by PUTTING values into it
+		for(int i = 0; i<3; i++){
+			for(int j=0; j<3; j++){
+				bb.putFloat(vertices[i][j]);		// add onto our ByteBuffer
+			}
+		}
+
+		bb = bb.order(ByteOrder.LITTLE_ENDIAN);		//order the bytes as Little endian
+
+		nFacets++;									//keeping track of # of facets created
+
+		bytes = bb.array();							//dump buffer into our fixed size array
+		return bytes;
+	}
+
 	/**
 	 * Method to construct a string that describes a facet, described by 3
 	 * vertices, in STL format. The ouput of this method will be written 
@@ -443,6 +674,7 @@ public class AFM_to_STL implements PlugInFilter {
 		gd.addNumericField("Samples/Line (before resampling)",1024.0, 0, 10, "");
 		gd.addNumericField("Height of a saturated pixel on model",5.0, 0, 10, "mm");
 		gd.addNumericField("Base Thickness",1.0, 0, 10, "mm");
+		gd.addCheckbox("Binary STL",false);
 		gd.showDialog();
 		
 		if(gd.wasCanceled()){return false;}
@@ -453,6 +685,7 @@ public class AFM_to_STL implements PlugInFilter {
 		double dHiPtModelmm	= gd.getNextNumber();
 		dBasethickness		= gd.getNextNumber();
 		nmPerSample			= dScanSizeNM/dSamplesPerLine;
+		isBinary			= gd.getNextBoolean();
 		
 		dZScaleFactor = dHiPtModelmm/255;
 		
