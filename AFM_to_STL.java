@@ -594,6 +594,67 @@ public class AFM_to_STL implements PlugInFilter {
 	}
 	
 	/**
+	 * Method to calculate a unit vector normal to a plane defined by three given vertices.
+	 * 
+	 * @param va first Vertex object
+	 * @param vb next Vertex object, ordered following the right-hand-rule
+	 * @param vc final Vertex object, following right-hand-rule
+	 *
+	 * @return double[] the coordinates to specify the unit normal.
+	 */
+	public double[] getNormal(Vertex va, Vertex vb, Vertex vc){
+		double[] v1 = {va.getX(), va.getY(), va.getZ()};
+		double[] v2 = {vb.getX(), vb.getY(), vb.getZ()};
+		double[] v3 = {vc.getX(), vc.getY(), vc.getZ()};
+		
+		//n = v1-> v2 X v1-> v3
+		double[] u 	= {v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]};
+		double[] w 	= {v3[0]-v1[0], v3[1]-v1[1], v3[2]-v1[2]};
+		
+		// calculate normal vector using cross product
+		double[] n 	= {u[1]*w[2]-w[1]*u[2],  u[2]*w[0]-w[2]*u[0],  u[0]*w[1]-w[0]*u[1]};
+
+		double len 	= Math.sqrt(Math.pow(n[0],2.0) + Math.pow(n[1],2.0) + Math.pow(n[2],2.0));
+
+		// make the vector length 1
+		for(int i - 0; i<n.length; i++)
+			n[i] = n[i]/len;
+
+		return n;
+	}
+
+	/**
+	 * Method to calculate a unit vector normal to a plane defined by three given vertices.
+	 * 
+	 * @param va first Vertex object
+	 * @param vb next Vertex object, ordered following the right-hand-rule
+	 * @param vc final Vertex object, following right-hand-rule
+	 *
+	 * @return double[] the coordinates to specify the unit normal.
+	 */
+	public float[] getNormal(Vertex va, Vertex vb, Vertex vc){
+		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
+		float[] v2 			= {(float)vb.getX(), (float)vb.getY(), (float)vb.getZ()};
+		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
+		
+		//n = v1-> v2 X v1-> v3
+		float[] u 	= {v2[0]-v1[0], v2[1]-v1[1], v2[2]-v1[2]};
+		float[] w 	= {v3[0]-v1[0], v3[1]-v1[1], v3[2]-v1[2]};
+		
+		// calculate normal vector using cross product
+		float[] n 	= {u[1]*w[2]-w[1]*u[2],  u[2]*w[0]-w[2]*u[0],  u[0]*w[1]-w[0]*u[1]};
+
+		float len 	= (float) Math.sqrt(Math.pow(n[0],2.0) + Math.pow(n[1],2.0) + Math.pow(n[2],2.0));
+
+		// make the vector length 1
+		for(int i - 0; i<n.length; i++)
+			n[i] = n[i]/len;
+
+		return n;
+	}
+
+
+	/**
 	 * Method to construct a binary formatted definition of a facet based on three vertices.
 	 * 
 	 * @param va first Vertex object
@@ -609,7 +670,7 @@ public class AFM_to_STL implements PlugInFilter {
 		bb 					= bb.order(ByteOrder.LITTLE_ENDIAN);	//order the bytes as Little endian
 
 		//Floats are 32-bit
-		float[] n 			= new float[3];				//will deal with later
+		float[] n 			= getNormal(va, vb, vc);
 		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
 		float[] v2 			= {(float)vb.getX(), (float)vb.getY(), (float)vb.getZ()};
 		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
@@ -642,11 +703,12 @@ public class AFM_to_STL implements PlugInFilter {
 	 * @return the STL format string that will be written to the output file
 	 */
 	public String makeFacet(Vertex va, Vertex vb, Vertex vc){
+		double[] n 	= getNormal(va, vb, vc);
 		double[] v1 = {va.getX(), va.getY(), va.getZ()};
 		double[] v2 = {vb.getX(), vb.getY(), vb.getZ()};
 		double[] v3 = {vc.getX(), vc.getY(), vc.getZ()};
 		
-		String sOut = " facet normal 0 0 0\n"
+		String sOut = " facet normal "+n[0]+" "+n[1]+" "+n[2]+"\n"
 				+ " outer loop \n"
 				+ "  vertex "+v1[0]+" "+v1[1]+" "+v1[2]+"\n"
 				+ "  vertex "+v2[0]+" "+v2[1]+" "+v2[2]+"\n"
