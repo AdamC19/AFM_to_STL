@@ -617,7 +617,7 @@ public class AFM_to_STL implements PlugInFilter {
 		double len 	= Math.sqrt(Math.pow(n[0],2.0) + Math.pow(n[1],2.0) + Math.pow(n[2],2.0));
 
 		// make the vector length 1
-		for(int i - 0; i<n.length; i++)
+		for(int i = 0; i<n.length; i++)
 			n[i] = n[i]/len;
 
 		return n;
@@ -647,7 +647,7 @@ public class AFM_to_STL implements PlugInFilter {
 		float len 	= (float) Math.sqrt(Math.pow(n[0],2.0) + Math.pow(n[1],2.0) + Math.pow(n[2],2.0));
 
 		// make the vector length 1
-		for(int i - 0; i<n.length; i++)
+		for(int i = 0; i<n.length; i++)
 			n[i] = n[i]/len;
 
 		return n;
