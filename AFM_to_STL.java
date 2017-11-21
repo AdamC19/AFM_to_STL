@@ -632,7 +632,7 @@ public class AFM_to_STL implements PlugInFilter {
 	 *
 	 * @return double[] the coordinates to specify the unit normal.
 	 */
-	public float[] getNormal(Vertex va, Vertex vb, Vertex vc){
+	public float[] getFloatNormal(Vertex va, Vertex vb, Vertex vc){
 		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
 		float[] v2 			= {(float)vb.getX(), (float)vb.getY(), (float)vb.getZ()};
 		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
@@ -670,7 +670,7 @@ public class AFM_to_STL implements PlugInFilter {
 		bb 					= bb.order(ByteOrder.LITTLE_ENDIAN);	//order the bytes as Little endian
 
 		//Floats are 32-bit
-		float[] n 			= getNormal(va, vb, vc);
+		float[] n 			= getFloatNormal(va, vb, vc);
 		float[] v1 			= {(float)va.getX(), (float)va.getY(), (float)va.getZ()};
 		float[] v2 			= {(float)vb.getX(), (float)vb.getY(), (float)vb.getZ()};
 		float[] v3 			= {(float)vc.getX(), (float)vc.getY(), (float)vc.getZ()};
